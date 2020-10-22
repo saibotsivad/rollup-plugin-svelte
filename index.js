@@ -11,7 +11,6 @@ const to_major = str => Number(str[0]);
 function autoload() {
 	const pkg = require('svelte/package.json');
 	const version = to_major(pkg.version);
-
 	const { compile, preprocess } = require(version >= 3 ? 'svelte/compiler.js' : 'svelte');
 	return { compile, preprocess, version };
 }
@@ -249,13 +248,18 @@ module.exports = function (options = {}) {
 					}
 					: {};
 
+				const theseOptions = Object.assign(base_options, fixed_options, {
+					filename: id
+				}, version >= 3 ? null : {
+					name: capitalize(sanitize(id))
+				})
+				if (version >= 3) {
+					delete theseOptions.svelte
+				}
+
 				const compiled = compile(
 					code,
-					Object.assign(base_options, fixed_options, {
-						filename: id
-					}, version >= 3 ? null : {
-						name: capitalize(sanitize(id))
-					})
+					theseOptions
 				);
 
 				if (version >= 3) warnings = compiled.warnings || compiled.stats.warnings;
@@ -270,6 +274,11 @@ module.exports = function (options = {}) {
 					}
 				});
 
+				let bundle = {
+					code: compiled.js ? compiled.js.code : compiled.code,
+					map: compiled.js ? compiled.js.map : compiled.map
+				};
+
 				if ((css || options.emitCss) && compiled.css.code) {
 					let fname = id.replace(new RegExp(`\\${extension}$`), '.css');
 
@@ -277,7 +286,7 @@ module.exports = function (options = {}) {
 						const source_map_comment = `/*# sourceMappingURL=${compiled.css.map.toUrl()} */`;
 						compiled.css.code += `\n${source_map_comment}`;
 
-						compiled.js.code += `\nimport ${JSON.stringify(fname)};\n`;
+						bundle.code += `\nimport ${JSON.stringify(fname)};\n`;
 					}
 
 					cssLookup.set(fname, compiled.css);
@@ -289,7 +298,7 @@ module.exports = function (options = {}) {
 					compiled.js.dependencies = dependencies;
 				}
 
-				return compiled.js;
+				return bundle;
 			});
 		},
 		/**
